@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รายงานสภาพอากาศและฝุ่น PM2.5 ทั่วไทย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Taviraj:wght@300;400;500;600&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- เรียกใช้ Chart.js สำหรับวาดกราฟอากาศและฝุ่น -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #F7F4EE;
+    --card: #FFFFFF;
+    --line: #E4DECF;
+    --river: #35667F;
+    --river-dark: #24485C;
+    --river-light: #C7DCE2;
+    --sage: #8CA88F;
+    --text: #263238;
+    --text-soft: #64726F;
+    --text-faint: #98A19D;
+
+    --aqi-1: #5F9E7A;
+    --aqi-2: #8BB66E;
+    --aqi-3: #E3BE5E;
+    --aqi-4: #DE9450;
+    --aqi-5: #BE4F34;
+
+    --radius: 18px;
+    --shadow: 0 2px 24px rgba(36,72,92,0.07);
+  }
+
+  *{ box-sizing: border-box; }
+
+  html{ scroll-behavior: smooth; }
+
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans Thai', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .display{ font-family: 'Taviraj', serif; }
+
+  body::before{
+    content:"";
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(140,168,143,0.10), transparent 40%),
+      radial-gradient(circle at 90% 85%, rgba(53,102,127,0.08), transparent 45%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page-wrap{
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px 20px 64px;
+  }
+
+  header.top{
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  .eyebrow{
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    color: var(--river);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  h1.title{
+    font-size: 40px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--river-dark);
+    letter-spacing: 0.01em;
+  }
+
+  .subtitle{
+    color: var(--text-soft);
+    font-size: 15px;
+    margin-top: 6px;
+  }
+
+  /* Dropdown เลือกจังหวัด */
+  .province-selector-wrap {
+    margin: 20px auto;
+    text-align: center;
+    max-width: 320px;
+  }
+  .province-select {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Noto Sans Thai', sans-serif;
+    font-size: 16px;
+    color: var(--text);
+    background-color: var(--card);
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.25s;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2335667F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 16px;
+  }
+  .province-select:focus {
+    border-color: var(--river);
+  }
+
+  .river-divider{
+    width: 100%;
+    height: 22px;
+    margin: 18px 0 26px;
+    color: var(--sage);
+    opacity: 0.55;
+  }
+  .river-divider svg{ width:100%; height:100%; display:block; }
+
+  /* เมนูแถบเลือกแบบโค้งมน */
+  nav.tabs{
+    display: flex;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px;
+    box-shadow: var(--shadow);
+    margin-bottom: 26px;
+  }
+
+  nav.tabs button{
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 11px 8px;
+    border-radius: 999px;
+    font-family: 'Noto Sans Thai', sans-serif;
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--text-soft);
+    cursor: pointer;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  nav.tabs button.active{
+    background: var(--river);
+    color: #fff;
+    border: 1.5px solid #000000; /* ตัดขอบเส้นสีดำรอบปุ่มเปิดใช้งานตามภาพ */
+  }
+
+  /* การ์ดในหน้าหลัก */
+  .card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 26px 24px;
+  }
+
+  .hero-card{
+    text-align: center;
+    padding: 34px 24px 30px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-icon{ width: 64px; height: 64px; margin: 0 auto 6px; color: var(--river); }
+  .hero-temp{
+    font-size: 68px;
+    font-weight: 500;
+    color: var(--river-dark);
+    line-height: 1;
+  }
+  .hero-temp span{ font-size: 30px; font-weight: 400; vertical-align: top; }
+  .hero-desc{ font-size: 17px; color: var(--text); margin-top: 8px; }
+  .hero-feels{ font-size: 14px; color: var(--text-faint); margin-top: 4px; }
+
+  .gap{ height: 16px; }
+
+  .pm-summary-card{ text-align: center; }
+  .pm-label-row{
+    display:flex; align-items:baseline; justify-content:center; gap:10px;
+  }
+  .pm-value{ font-size: 46px; font-weight: 500; }
+  .pm-unit{ font-size: 14px; color: var(--text-faint); }
+  .pm-status{
+    display:inline-block; margin-top: 10px; padding: 6px 18px;
+    border-radius: 999px; font-size: 14px; font-weight: 600; color: #fff;
+  }
+  .pm-bar-track{
+    margin-top: 18px; height: 10px; border-radius: 999px;
+    background: linear-gradient(to right, var(--aqi-1), var(--aqi-2), var(--aqi-3), var(--aqi-4), var(--aqi-5));
+    position: relative;
+  }
+  .pm-bar-marker{
+    position: absolute; top: -5px; width: 20px; height: 20px;
+    background: var(--card); border: 3px solid var(--river-dark);
+    border-radius: 50%; transform: translateX(-50%);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+  }
+  .pm-note{ font-size: 13.5px; color: var(--text-soft); margin-top: 16px; }
+
+  .updated-note{
+    text-align:center; font-size: 12.5px; color: var(--text-faint); margin-top: 18px;
+  }
+
+  /* ปุ่มลิงก์ภายนอก */
+  .ext-link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 18px;
+    padding: 14px;
+    background: var(--river);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Noto Sans Thai', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s;
+    box-shadow: 0 4px 12px rgba(53,102,127,0.15);
+  }
+  .ext-link-btn:hover {
+    background: var(--river-dark);
+  }
+
+  /* ตารางสถิติในป๊อปอัป */
+  .stat-grid{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card{
+    background: var(--card); border:1px solid var(--line); border-radius: 14px;
+    padding: 16px 10px; text-align: center; box-shadow: var(--shadow);
+  }
+  .stat-card .stat-icon{ width: 26px; height: 26px; margin: 0 auto 8px; color: var(--sage); }
+  .stat-card .stat-value{ font-size: 22px; font-weight: 600; color: var(--river-dark); }
+  .stat-card .stat-label{ font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+
+  .section-heading{
+    font-size: 16px; font-weight: 600; color: var(--river-dark); margin: 0 0 4px;
+  }
+  .section-sub{ font-size: 13px; color: var(--text-faint); margin: 0 0 14px; }
+
+  .chart-card{ padding: 20px 16px 14px; }
+  .chart-wrap{ position: relative; height: 240px; }
+
+  .pm-hero{ text-align:center; padding: 30px 24px 26px; }
+  .pm-hero .pm-value{ font-size: 58px; }
+
+  .compare-row{
+    display:flex; justify-content:space-between; margin-top: 18px; font-size: 13px; color: var(--text-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+  .compare-item b{ display:block; color: var(--text); font-size: 15px; }
+
+  .advice-card{
+    display:flex; gap: 16px; align-items:flex-start; margin-top: 16px;
+  }
+  .advice-icon{
+    flex-shrink:0; width: 46px; height:46px; border-radius: 50%;
+    display:flex; align-items:center; justify-content:center; color:#fff;
+  }
+  .advice-icon svg{ width:24px; height:24px; }
+  .advice-title{ font-weight: 600; font-size: 15.5px; margin: 0 0 4px; }
+  .advice-text{ font-size: 13.5px; color: var(--text-soft); line-height: 1.55; margin:0; }
+
+  .loading, .error-msg{
+    text-align:center; color: var(--text-faint); font-size: 14px; padding: 40px 10px;
+  }
+  .error-msg{ color: var(--aqi-5); }
+
+  footer.credit{
+    text-align:center; font-size: 11.5px; color: var(--text-faint); margin-top: 30px;
+  }
+
+  @media (max-width: 420px){
+    h1.title{ font-size: 32px; }
+    .hero-temp{ font-size: 54px; }
+    .stat-grid{ gap: 8px; }
+  }
+
+  /* ==================== สไตล์ป๊อปอัปที่ทับซ้อน (MODAL SYSTEM) ==================== */
+  .modal-overlay {
+    display: none; /* ซ่อนไว้รอการคลิก */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4); /* ฉากหลังมืดลง 40% */
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    padding: 15px;
+  }
+
+  .modal-content {
+    background-color: var(--bg); /* ใช้สีเดียวกับธีมเว็บ */
+    padding: 24px;
+    border-radius: 24px;
+    width: 100%;
+    max-width: 650px; /* ขยายขนาดกล่องให้รองรับกราฟิกสภาพอากาศได้เต็มที่ */
+    max-height: 90vh;
+    overflow-y: auto; /* เลื่อนสกรอลล์ด้านในได้หากหน้าจอโทรศัพท์สั้น */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    position: relative;
+    transform: translateY(30px);
+    transition: transform 0.3s ease;
+    border: 1px solid var(--line);
+  }
+
+  /* เปิดเอฟเฟกต์เด้งขึ้นนุ่มๆ */
+  .modal-overlay.show {
+    display: flex;
+    opacity: 1;
+  }
+  .modal-overlay.show .modal-content {
+    transform: translateY(0);
+  }
+
+  /* ปุ่มกากบาทปิด (X) */
+  .close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--text-faint);
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s ease;
+    z-index: 10;
+  }
+  .close-btn:hover {
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <header class="top">
+    <div class="eyebrow" id="region-eyebrow">ประเทศไทย</div>
+    <h1 class="title display" id="page-title">กรุงเทพมหานคร วันนี้</h1>
+    <div class="subtitle">สภาพอากาศและคุณภาพอากาศ อัปเดตจากข้อมูลจริง</div>
+  </header>
+
+  <!-- ตัวเลือกจังหวัด -->
+  <div class="province-selector-wrap">
+    <select id="provinceSelect" class="province-select" onchange="handleProvinceChange()">
+      <!-- เจนเนอเรตโดย JS -->
+    </select>
+  </div>
+
+  <div class="river-divider">
+    <svg viewBox="0 0 400 20" preserveAspectRatio="none">
+      <path d="M0,10 C 40,0 60,20 100,10 C 140,0 160,20 200,10 C 240,0 260,20 300,10 C 340,0 360,20 400,10"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <!-- แถบเมนูกด (Tab Container) -->
+  <nav class="tabs" role="tablist" aria-label="เลือกหน้าข้อมูล">
+    <!-- แท็บสรุป จะเปิดเนื้อหาบนหน้าหลักปกติ -->
+    <button class="active" id="tabbtn-1" role="tab" onclick="switchMainTab(this)">สรุป</button>
+    <!-- แท็บอากาศละเอียดและฝุ่น PM2.5 เมื่อกดแล้วจะดึงความสามารถป๊อปอัปมาครอบทับกราฟทันที -->
+    <button id="tabbtn-2" role="tab" onclick="openModal('air-detail-modal')">อากาศละเอียด</button>
+    <button id="tabbtn-3" role="tab" onclick="openModal('pm25-modal')">ฝุ่น PM2.5</button>
+  </nav>
+
+  <!-- ==================== หน้าหลัก: แสดงข้อมูลโดยสรุป (Overview) ==================== -->
+  <section class="tab-panel active" id="tab-1">
+    <div id="tab1-loading" class="loading">กำลังโหลดข้อมูล...</div>
+    <div id="tab1-content" style="display:none;">
+
+      <div class="card hero-card">
+        <div class="hero-icon" id="hero-icon"></div>
+        <div class="hero-temp display" id="hero-temp">--<span>°C</span></div>
+        <div class="hero-desc" id="hero-desc">-</div>
+        <div class="hero-feels" id="hero-feels">-</div>
+      </div>
+
+      <div class="gap"></div>
+
+      <div class="card pm-summary-card">
+        <div class="section-heading" style="text-align:center;">ค่าฝุ่น PM2.5 ตอนนี้</div>
+        <div class="pm-label-row">
+          <div class="pm-value" id="pm-value" style="color:var(--river-dark)">--</div>
+          <div class="pm-unit">µg/m³</div>
+        </div>
+        <div class="pm-status" id="pm-status">-</div>
+        <div class="pm-bar-track">
+          <div class="pm-bar-marker" id="pm-bar-marker" style="left:0%"></div>
+        </div>
+        <div class="pm-note" id="pm-note">-</div>
+      </div>
+
+      <div class="updated-note" id="updated-note-1">-</div>
+    </div>
+    <div id="tab1-error" class="error-msg" style="display:none;">ไม่สามารถโหลดข้อมูลได้ในขณะนี้</div>
+  </section>
+
+
+  <!-- ==================== ส่วนหน้าต่างป๊อปอัป (POPUP MODALS) พร้อมรายละเอียดกราฟิก ==================== -->
+
+  <!-- ป๊อปอัปชั้นที่ 1: อากาศละเอียด -->
+  <div id="air-detail-modal" class="modal-overlay" onclick="closeModalOutside(event, 'air-detail-modal')">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('air-detail-modal')">&times;</span>
+      
+      <div id="tab2-loading" class="loading">กำลังโหลดข้อมูลอากาศแบบละเอียด...</div>
+      
+      <div id="tab2-content" style="display:none;">
+        <h2 class="display" style="color: var(--river-dark); margin-top: 0; font-size: 24px;">🍂 ข้อมูลอากาศละเอียด</h2>
+        <div class="river-divider" style="margin: 10px 0 20px;">
+          <svg viewBox="0 0 400 20" preserveAspectRatio="none"><path d="M0,10 C 40,0 60,20 100,10 C 140,0 160,20 200,10 C 240,0 260,20 300,10 C 340,0 360,20 400,10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><path d="M9 14a3 3 0 106 0c0-1.5-1.5-2-1.5-4A2.5 2.5 0 0012 8a2.5 2.5 0 00-1.5 2c0 2-1.5 2.5-1.5 4z"/></svg>
+            </div>
+            <div class="stat-value" id="stat-humidity">--%</div>
+            <div class="stat-label">ความชื้น</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+            </div>
+            <div class="stat-value" id="stat-uv">--</div>
+            <div class="stat-label">ดัชนี UV</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 16.5a3.5 3.5 0 010-7c.3-2.5 2.4-4.5 5-4.5 2.3 0 4.2 1.5 4.8 3.6A3.5 3.5 0 0117 16.5H8z"/><path d="M9 19l-1 2M13 19l-1 2M17 19l-1 2"/></svg>
+            </div>
+            <div class="stat-value" id="stat-rain">--%</div>
+            <div class="stat-label">โอกาสฝนตกวันนี้</div>
+          </div>
+        </div>
+
+        <div class="card chart-card" style="background: var(--card);">
+          <div class="section-heading">อุณหภูมิและโอกาสฝน 11 วัน</div>
+          <div class="section-sub">7 วันที่ผ่านมา · วันนี้ · พยากรณ์ 3 วันข้างหน้า</div>
+          <div class="chart-wrap"><canvas id="weatherChart"></canvas></div>
+        </div>
+
+        <a href="#" id="ext-weather-btn" target="_blank" class="ext-link-btn">
+          ดูกราฟและเรดาร์อากาศแบบละเอียดที่หน้าใหม่
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>
+
+        <div class="updated-note" id="updated-note-2">-</div>
+      </div>
+      <div id="tab2-error" class="error-msg" style="display:none;">ไม่สามารถโหลดข้อมูลอากาศได้ในขณะนี้</div>
+    </div>
+  </div>
+
+  <!-- ป๊อปอัปชั้นที่ 2: ฝุ่น PM2.5 -->
+  <div id="pm25-modal" class="modal-overlay" onclick="closeModalOutside(event, 'pm25-modal')">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('pm25-modal')">&times;</span>
+      
+      <div id="tab3-loading" class="loading">กำลังโหลดข้อมูลฝุ่น PM2.5...</div>
+      
+      <div id="tab3-content" style="display:none;">
+        <h2 class="display" style="color: var(--river-dark); margin-top: 0; font-size: 24px;">😷 รายละเอียดฝุ่น PM2.5</h2>
+        <div class="river-divider" style="margin: 10px 0 20px;">
+          <svg viewBox="0 0 400 20" preserveAspectRatio="none"><path d="M0,10 C 40,0 60,20 100,10 C 140,0 160,20 200,10 C 240,0 260,20 300,10 C 340,0 360,20 400,10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </div>
+
+        <div class="card pm-hero" style="background: var(--card);">
+          <div class="section-heading" style="text-align:center;">PM2.5 ตอนนี้</div>
+          <div class="pm-label-row" style="margin-top:6px;">
+            <div class="pm-value display" id="pm3-value" style="color:var(--river-dark)">--</div>
+            <div class="pm-unit">µg/m³</div>
+          </div>
+          <div class="pm-status" id="pm3-status">-</div>
+
+          <div class="compare-row">
+            <div class="compare-item">เมื่อวาน <b id="pm-yesterday">--</b></div>
+            <div class="compare-item">เฉลี่ย 7 วัน <b id="pm-avg7">--</b></div>
+            <div class="compare-item">สูงสุดใน 7 วัน <b id="pm-max7">--</b></div>
+          </div>
+        </div>
+
+        <div class="gap"></div>
+
+        <div class="card chart-card" style="background: var(--card);">
+          <div class="section-heading">เทียบค่าฝุ่นย้อนหลัง 7 วัน</div>
+          <div class="section-sub">หน่วย: µg/m³ (เส้นประคือค่ามาตรฐานเฝ้าระวัง 37.5)</div>
+          <div class="chart-wrap"><canvas id="pmChart"></canvas></div>
+        </div>
+
+        <div class="gap"></div>
+
+        <div class="card" style="background: var(--card);">
+          <div class="advice-card">
+            <div class="advice-icon" id="advice-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M13 4a2 2 0 11-4 0 2 2 0 014 0zM6 20l3-8 2 3 2-5 5 10"/></svg>
+            </div>
+            <div>
+              <p class="advice-title" id="advice-title">กำลังประเมินสภาพอากาศ...</p>
+              <p class="advice-text" id="advice-text">โปรดรอสักครู่</p>
+            </div>
+          </div>
+        </div>
+
+        <a href="#" id="ext-air-btn" target="_blank" class="ext-link-btn">
+          ดูอันดับโลกและสถานการณ์ฝุ่นของจังหวัดนี้ที่หน้าใหม่
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>
+
+        <div class="updated-note" id="updated-note-3">-</div>
+      </div>
+      <div id="tab3-error" class="error-msg" style="display:none;">ไม่สามารถโหลดข้อมูลฝุ่นได้ในขณะนี้</div>
+    </div>
+  </div>
+
+  <footer class="credit" id="coord-credit">ข้อมูลจาก Open-Meteo</footer>
+
+</div>
+
+<script>
+  // รายชื่อ 77 จังหวัดในประเทศไทย
+  const PROVINCES = [
+    { name: 'กรุงเทพมหานคร', lat: 13.7563, lon: 100.5018, region: 'ภาคกลาง' },
+    { name: 'กระบี่', lat: 8.0863, lon: 98.9063, region: 'ภาคใต้' },
+    { name: 'กาญจนบุรี', lat: 14.0228, lon: 99.5328, region: 'ภาคตะวันตก' },
+    { name: 'กาฬสินธุ์', lat: 16.4322, lon: 103.5061, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'กำแพงเพชร', lat: 16.4828, lon: 99.5228, region: 'ภาคเหนือ' },
+    { name: 'ขอนแก่น', lat: 16.4322, lon: 102.8236, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'จันทบุรี', lat: 12.6086, lon: 102.1039, region: 'ภาคตะวันออก' },
+    { name: 'ฉะเชิงเทรา', lat: 13.6889, lon: 101.0694, region: 'ภาคตะวันออก' },
+    { name: 'ชลบุรี', lat: 13.3611, lon: 100.9847, region: 'ภาคตะวันออก' },
+    { name: 'ชัยนาท', lat: 15.1858, lon: 100.1250, region: 'ภาคกลาง' },
+    { name: 'ชัยภูมิ', lat: 15.8064, lon: 102.0317, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'ชุมพร', lat: 10.4931, lon: 99.1797, region: 'ภาคใต้' },
+    { name: 'เชียงราย', lat: 19.9072, lon: 99.8325, region: 'ภาคเหนือ' },
+    { name: 'เชียงใหม่', lat: 18.7883, lon: 98.9853, region: 'ภาคเหนือ' },
+    { name: 'ตรัง', lat: 7.5564, lon: 99.6114, region: 'ภาคใต้' },
+    { name: 'ตราด', lat: 12.2428, lon: 102.5175, region: 'ภาคตะวันออก' },
+    { name: 'ตาก', lat: 16.8839, lon: 99.1258, region: 'ภาคตะวันตก' },
+    { name: 'นครนายก', lat: 14.2069, lon: 101.2131, region: 'ภาคกลาง' },
+    { name: 'นครปฐม', lat: 13.8194, lon: 100.0611, region: 'ภาคกลาง' },
+    { name: 'นครพนม', lat: 17.4059, lon: 104.7797, region: 'แม่น้ำโขง · ภาคอีสานตอนบน' },
+    { name: 'นครราชสีมา', lat: 14.9799, lon: 102.0978, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'นครศรีธรรมราช', lat: 8.4333, lon: 99.9667, region: 'ภาคใต้' },
+    { name: 'นครสวรรค์', lat: 15.7047, lon: 100.1372, region: 'ภาคกลาง' },
+    { name: 'นนทบุรี', lat: 13.8597, lon: 100.4989, region: 'ภาคกลาง' },
+    { name: 'นราธิวาส', lat: 6.4256, lon: 101.8253, region: 'ภาคใต้' },
+    { name: 'น่าน', lat: 18.7831, lon: 100.7814, region: 'ภาคเหนือ' },
+    { name: 'บึงกาฬ', lat: 18.3614, lon: 103.6531, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'บุรีรัมย์', lat: 14.9939, lon: 103.1025, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'ปทุมธานี', lat: 14.0208, lon: 100.5250, region: 'ภาคกลาง' },
+    { name: 'ประจวบคีรีขันธ์', lat: 11.8000, lon: 99.7833, region: 'ภาคตะวันตก' },
+    { name: 'ปราจีนบุรี', lat: 14.0531, lon: 101.3725, region: 'ภาคตะวันออก' },
+    { name: 'ปัตตานี', lat: 6.8681, lon: 101.2500, region: 'ภาคใต้' },
+    { name: 'พระนครศรีอยุธยา', lat: 14.3517, lon: 100.5772, region: 'ภาคกลาง' },
+    { name: 'พะเยา', lat: 19.1658, lon: 99.9031, region: 'ภาคเหนือ' },
+    { name: 'พังงา', lat: 8.4503, lon: 98.5256, region: 'ภาคใต้' },
+    { name: 'พัทลุง', lat: 7.6167, lon: 100.0750, region: 'ภาคใต้' },
+    { name: 'พิจิตร', lat: 16.4403, lon: 100.3486, region: 'ภาคเหนือ' },
+    { name: 'พิษณุโลก', lat: 16.8247, lon: 100.2636, region: 'ภาคเหนือ' },
+    { name: 'เพชรบุรี', lat: 13.1119, lon: 99.9439, region: 'ภาคตะวันตก' },
+    { name: 'เพชรบูรณ์', lat: 16.4194, lon: 101.1594, region: 'ภาคเหนือ' },
+    { name: 'แพร่', lat: 18.1444, lon: 100.1408, region: 'ภาคเหนือ' },
+    { name: 'ภูเก็ต', lat: 7.8804, lon: 98.3922, region: 'ภาคใต้' },
+    { name: 'มหาสารคาม', lat: 16.1844, lon: 103.3006, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'มุกดาหาร', lat: 16.5436, lon: 104.7144, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'แม่ฮ่องสอน', lat: 19.3014, lon: 97.9656, region: 'ภาคเหนือ' },
+    { name: 'ยโสธร', lat: 15.7958, lon: 104.1453, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'ยะลา', lat: 6.5394, lon: 101.2814, region: 'ภาคใต้' },
+    { name: 'ร้อยเอ็ด', lat: 16.0544, lon: 103.6525, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'ระนอง', lat: 9.9658, lon: 98.6347, region: 'ภาคใต้' },
+    { name: 'ระยอง', lat: 12.6814, lon: 101.2806, region: 'ภาคตะวันออก' },
+    { name: 'ราชบุรี', lat: 13.5283, lon: 99.8133, region: 'ภาคตะวันตก' },
+    { name: 'ลพบุรี', lat: 14.7997, lon: 100.6533, region: 'ภาคกลาง' },
+    { name: 'ลำปาง', lat: 18.2858, lon: 99.4917, region: 'ภาคเหนือ' },
+    { name: 'ลำพูน', lat: 18.5775, lon: 99.0083, region: 'ภาคเหนือ' },
+    { name: 'เลย', lat: 17.4856, lon: 101.7231, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'ศรีสะเกษ', lat: 15.1158, lon: 104.3294, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'สกลนคร', lat: 17.1611, lon: 104.1472, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'สงขลา', lat: 7.1897, lon: 100.5953, region: 'ภาคใต้' },
+    { name: 'สตูล', lat: 6.6233, lon: 100.0672, region: 'ภาคใต้' },
+    { name: 'สมุทรปราการ', lat: 13.5992, lon: 100.5967, region: 'ภาคกลาง' },
+    { name: 'สมุทรสงคราม', lat: 13.4094, lon: 100.0022, region: 'ภาคกลาง' },
+    { name: 'สมุทรสาคร', lat: 13.5475, lon: 100.2742, region: 'ภาคกลาง' },
+    { name: 'สระแก้ว', lat: 13.8242, lon: 102.0647, region: 'ภาคตะวันออก' },
+    { name: 'สระบุรี', lat: 14.5289, lon: 100.9108, region: 'ภาคกลาง' },
+    { name: 'สิงห์บุรี', lat: 14.8936, lon: 100.3967, region: 'ภาคกลาง' },
+    { name: 'สุโขทัย', lat: 17.0078, lon: 99.8264, region: 'ภาคเหนือ' },
+    { name: 'สุพรรณบุรี', lat: 14.4742, lon: 100.1175, region: 'ภาคกลาง' },
+    { name: 'สุราษฎร์ธานี', lat: 9.1400, lon: 99.3331, region: 'ภาคใต้' },
+    { name: 'สุรินทร์', lat: 14.8819, lon: 103.4936, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'หนองคาย', lat: 17.8783, lon: 102.7422, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'หนองบัวลำภู', lat: 17.2033, lon: 102.4381, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'อ่างทอง', lat: 14.5900, lon: 100.4533, region: 'ภาคกลาง' },
+    { name: 'อำนาจเจริญ', lat: 15.8578, lon: 104.6258, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'อุดรธานี', lat: 17.4158, lon: 102.7858, region: 'ภาคตะวันออกเฉียงเหนือ' },
+    { name: 'อุตรดิตถ์', lat: 17.6258, lon: 100.0992, region: 'ภาคเหนือ' },
+    { name: 'อุทัยธานี', lat: 15.3783, lon: 100.0247, region: 'ภาคกลาง' },
+    { name: 'อุบลราชธานี', lat: 15.2286, lon: 104.8564, region: 'ภาคตะวันออกเฉียงเหนือ' }
+  ];
+
+  let weatherChartInstance = null;
+  let pmChartInstance = null;
+
+  // เพิ่มข้อมูลลงใน Select Dropdown
+  const selectEl = document.getElementById('provinceSelect');
+  PROVINCES.forEach((p, index) => {
+    let opt = document.createElement('option');
+    opt.value = index;
+    opt.textContent = p.name;
+    selectEl.appendChild(opt);
+  });
+
+  // ==================== ระบบจัดการแท็บและ MODAL ====================
+
+  // เปิด Popup ขึ้นมาทับ
+  function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        modal.classList.add('show');
+      }, 10);
+      
+      // อัปเดตกราฟในป๊อปอัปให้มีขนาดพอดีกับกล่องที่ถูกดีดขึ้นมาใหม่
+      setTimeout(() => {
+        if (modalId === 'air-detail-modal' && weatherChartInstance) {
+          weatherChartInstance.resize();
+        } else if (modalId === 'pm25-modal' && pmChartInstance) {
+          pmChartInstance.resize();
+        }
+      }, 310);
+    }
+  }
+
+  // ปิด Popup
+  function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.remove('show');
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 300);
+    }
+  }
+
+  // กดขอบนอกสุดของป๊อปอัปเพื่อปิด
+  function closeModalOutside(event, modalId) {
+    if (event.target.id === modalId) {
+      closeModal(modalId);
+    }
+  }
+
+  // สลับแท็บหน้าหลัก (เฉพาะส่วน สรุป)
+  function switchMainTab(element) {
+    const tabs = document.querySelectorAll('nav.tabs button');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    element.classList.add('active');
+  }
+
+  // ==================== สรุปข้อมูล Mapping ====================
+  const WEATHER_MAP = {
+    0:  { label: 'ท้องฟ้าแจ่มใส', icon: 'sun' },
+    1:  { label: 'มีเมฆบางส่วน', icon: 'cloud-sun' },
+    2:  { label: 'มีเมฆเป็นบางช่วง', icon: 'cloud-sun' },
+    3:  { label: 'มีเมฆมาก', icon: 'cloud' },
+    45: { label: 'มีหมอก', icon: 'fog' },
+    48: { label: 'มีหมอกน้ำแข็ง', icon: 'fog' },
+    51: { label: 'ฝนปรอยเล็กน้อย', icon: 'rain' },
+    53: { label: 'ฝนปรอยปานกลาง', icon: 'rain' },
+    55: { label: 'ฝนปรอยหนัก', icon: 'rain' },
+    61: { label: 'ฝนตกเล็กน้อย', icon: 'rain' },
+    63: { label: 'ฝนตกปานกลาง', icon: 'rain' },
+    65: { label: 'ฝนตกหนัก', icon: 'rain' },
+    80: { label: 'ฝนตกเป็นช่วง', icon: 'rain' },
+    81: { label: 'ฝนตกเป็นช่วงปานกลาง', icon: 'rain' },
+    82: { label: 'ฝนตกเป็นช่วงหนักมาก', icon: 'rain' },
+    95: { label: 'พายุฝนฟ้าคะนอง', icon: 'storm' },
+    96: { label: 'พายุฝนฟ้าคะนองมีลูกเห็บ', icon: 'storm' },
+    99: { label: 'พายุฝนฟ้าคะนองรุนแรง', icon: 'storm' }
+  };
+  function weatherInfo(code){
+    return WEATHER_MAP[code] || { label: 'สภาพอากาศทั่วไป', icon: 'cloud' };
+  }
+
+  const ICONS = {
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>',
+    'cloud-sun': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="3"/><path d="M8 2.5v1.5M8 12v1.2M3.3 4.7l1 1M12.7 4.7l-1 1M2.5 8h1.5M12.7 11.3l-1-1"/><path d="M8.5 16.5A3.5 3.5 0 018 9.6c.3-2 2-3.6 4-3.6 1.9 0 3.5 1.2 4 3a3.2 3.2 0 01-.5 6.5H8.5z"/></svg>',
+    cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.5 17.5a4 4 0 010-8c.4-2.7 2.7-4.8 5.5-4.8 2.6 0 4.8 1.7 5.5 4.1a3.8 3.8 0 01-.5 8.7h-10.5z"/></svg>',
+    fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 8.5a4 4 0 014-3.7 4.3 4.3 0 014 2.9M4 12h16M3 15.5h18M5 19h14"/></svg>',
+    rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.5 13.5a4 4 0 010-8c.4-2.7 2.7-4.8 5.5-4.8 2.6 0 4.8 1.7 5.5 4.1a3.8 3.8 0 01-.5 8.7h-10.5z"/><path d="M8 17l-1.2 3M12 17l-1.2 3M16 17l-1.2 3"/></svg>',
+    storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.5 12.5a4 4 0 010-8c.4-2.7 2.7-4.8 5.5-4.8 2.6 0 4.8 1.7 5.5 4.1a3.8 3.8 0 01-.5 8.7h-10.5z"/><path d="M13 13l-3 5h2.5l-2 4 4.5-6h-2.5l1.5-3z" fill="currentColor" stroke="none"/></svg>'
+  };
+
+  function pmStatus(v){
+    if(v <= 15)   return { label:'ดีมาก', color:'var(--aqi-1)', pct: (v/15)*20 };
+    if(v <= 25)   return { label:'ดี', color:'var(--aqi-2)', pct: 20 + ((v-15)/10)*20 };
+    if(v <= 37.5) return { label:'ปานกลาง', color:'var(--aqi-3)', pct: 40 + ((v-25)/12.5)*20 };
+    if(v <= 75)   return { label:'เริ่มมีผลกระทบต่อสุขภาพ', color:'var(--aqi-4)', pct: 60 + ((v-37.5)/37.5)*20 };
+    return { label:'มีผลกระทบต่อสุขภาพ', color:'var(--aqi-5)', pct: Math.min(80 + ((v-75)/75)*20, 100) };
+  }
+
+  function pmAdvice(v){
+    if(v <= 25){
+      return {
+        title: 'วิ่งและออกกำลังกายกลางแจ้งได้ตามปกติ',
+        text: 'คุณภาพอากาศอยู่ในเกณฑ์ดี เหมาะกับการวิ่ง ปั่นจักรยาน หรือทำกิจกรรมกลางแจ้งได้เต็มที่',
+        color: 'var(--aqi-1)'
+      };
+    } else if(v <= 37.5){
+      return {
+        title: 'ออกกำลังกายกลางแจ้งได้ แต่เพิ่มความระมัดระวัง',
+        text: 'กลุ่มที่แพ้ง่ายหรือมีโรคทางเดินหายใจควรลดความหนักของกิจกรรม และสังเกตอาการผิดปกติ',
+        color: 'var(--aqi-3)'
+      };
+    } else if(v <= 75){
+      return {
+        title: 'ควรลดกิจกรรมกลางแจ้งที่ใช้แรงมาก',
+        text: 'แนะนำให้วิ่งหรือออกกำลังกายในที่ร่ม ถ้าต้องออกนอกบ้านควรใส่หน้ากากกันฝุ่น PM2.5',
+        color: 'var(--aqi-4)'
+      };
+    } else {
+      return {
+        title: 'ควรงดกิจกรรมกลางแจ้ง',
+        text: 'ค่าฝุ่นอยู่ในระดับที่มีผลกระทบต่อสุขภาพ ควรอยู่ในอาคาร ปิดหน้าต่าง และสวมหน้ากาก N95 หากจำเป็นต้องออกไปข้างนอก',
+        color: 'var(--aqi-5)'
+      };
+    }
+  }
+
+  function buildDailyPM(air){
+    const byDay = {};
+    air.hourly.time.forEach((t, i) => {
+      const day = t.slice(0,10);
+      const v = air.hourly.pm2_5[i];
+      if(v == null) return;
+      if(!byDay[day]) byDay[day] = [];
+      byDay[day].push(v);
+    });
+    const days = Object.keys(byDay).sort();
+    const maxByDay = days.map(d => Math.max(...byDay[d]));
+    return { time: days, pm2_5_max: maxByDay };
+  }
+
+  function fmtDay(dateStr){
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short' });
+  }
+  function timeNow(){
+    return new Date().toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+  }
+  function nowThaiFull(){
+    const d = new Date();
+    const dateStr = d.toLocaleDateString('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    const timeStr = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    return 'วันที่ ' + dateStr + ' เวลา ' + timeStr + ' น.';
+  }
+
+  function showTabError(tabId, message){
+    document.getElementById(tabId+'-loading').style.display='none';
+    document.getElementById(tabId+'-content').style.display='none';
+    const errEl = document.getElementById(tabId+'-error');
+    errEl.style.display='block';
+    errEl.innerHTML = message.replace(/</g,'&lt;') +
+      '<br><button onclick="handleProvinceChange()" style="margin-top:14px;padding:8px 18px;border:none;border-radius:999px;background:var(--river);color:#fff;font-family:\'Noto Sans Thai\';cursor:pointer;">ลองใหม่</button>';
+  }
+
+  function showLoadingState(){
+    for(let i=1; i<=3; i++){
+      document.getElementById('tab'+i+'-loading').style.display = 'block';
+      document.getElementById('tab'+i+'-content').style.display = 'none';
+      document.getElementById('tab'+i+'-error').style.display = 'none';
+    }
+  }
+
+  // เรียกใช้ฟังก์ชันนี้เมื่อเปลี่ยนจังหวัดใน Dropdown
+  async function handleProvinceChange() {
+    showLoadingState();
+    
+    const selectedIndex = document.getElementById('provinceSelect').value;
+    const province = PROVINCES[selectedIndex];
+
+    // ปรับเปลี่ยนหัวข้อเว็บตามจังหวัดที่เลือก
+    document.getElementById('region-eyebrow').textContent = province.region;
+    document.getElementById('page-title').textContent = province.name + ' วันนี้';
+    document.getElementById('coord-credit').textContent = `ข้อมูลจาก Open-Meteo · พิกัด (${province.lat.toFixed(2)}°N, ${province.lon.toFixed(2)}°E)`;
+
+    // ตั้งค่าลิงก์ไปยังหน้าเว็บใหม่ (เปิดภายนอก) อิงตามพิกัดของจังหวัด
+    document.getElementById('ext-weather-btn').href = `https://weather.com/th-TH/weather/today/l/${province.lat},${province.lon}`;
+    document.getElementById('ext-air-btn').href = `https://www.iqair.com/thailand`;
+
+    const weatherURL = `https://api.open-meteo.com/v1/forecast?latitude=${province.lat}&longitude=${province.lon}` +
+      `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max` +
+      `&timezone=Asia%2FBangkok&past_days=7&forecast_days=4`;
+
+    const airURL = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${province.lat}&longitude=${province.lon}` +
+      `&current=pm2_5,pm10` +
+      `&hourly=pm2_5` +
+      `&timezone=Asia%2FBangkok&past_days=7&forecast_days=1`;
+
+    let weather, air;
+    try{
+      const wRes = await fetch(weatherURL);
+      if(!wRes.ok) throw new Error('Weather API HTTP ' + wRes.status);
+      weather = await wRes.json();
+
+      const aRes = await fetch(airURL);
+      if(!aRes.ok) throw new Error('Air quality API HTTP ' + aRes.status);
+      air = await aRes.json();
+    }catch(err){
+      console.error(err);
+      const msg = 'โหลดข้อมูลไม่สำเร็จ: ' + (err.message || String(err));
+      showTabError('tab1', msg);
+      showTabError('tab2', msg);
+      showTabError('tab3', msg);
+      return;
+    }
+
+    try{ renderTab1(weather, air); } catch(e){ showTabError('tab1', 'เกิดข้อผิดพลาดในการแสดงผล'); }
+    try{ renderTab2(weather); } catch(e){ showTabError('tab2', 'เกิดข้อผิดพลาดในการแสดงผล'); }
+    try{ renderTab3(air); } catch(e){ showTabError('tab3', 'เกิดข้อผิดพลาดในการแสดงผล'); }
+  }
+
+  // 1. เรนเดอร์แท็บสรุป (หน้าหลัก)
+  function renderTab1(weather, air){
+    const cur = weather.current;
+    const info = weatherInfo(cur.weather_code);
+    document.getElementById('hero-icon').innerHTML = ICONS[info.icon];
+    document.getElementById('hero-temp').innerHTML = Math.round(cur.temperature_2m) + '<span>°C</span>';
+    document.getElementById('hero-desc').textContent = info.label + ' · ความชื้น ' + Math.round(cur.relative_humidity_2m) + '%';
+    document.getElementById('hero-feels').textContent = 'รู้สึกเหมือน ' + Math.round(cur.apparent_temperature) + '°C';
+
+    const pmVal = air.current.pm2_5;
+    const status = pmStatus(pmVal);
+    document.getElementById('pm-value').textContent = Math.round(pmVal * 10)/10;
+    const statusEl = document.getElementById('pm-status');
+    statusEl.textContent = status.label;
+    statusEl.style.background = status.color;
+    document.getElementById('pm-bar-marker').style.left = status.pct + '%';
+    document.getElementById('pm-bar-marker').style.borderColor = status.color;
+
+    document.getElementById('pm-note').textContent =
+      pmVal <= 25 ? 'อากาศวันนี้เหมาะกับการออกไปทำกิจกรรมกลางแจ้ง'
+      : pmVal <= 37.5 ? 'ออกไปข้างนอกได้ตามปกติ กลุ่มเสี่ยงควรสังเกตอาการ'
+      : pmVal <= 75 ? 'ควรลดเวลาทำกิจกรรมกลางแจ้งที่ใช้แรงมาก'
+      : 'ควรหลีกเลี่ยงการออกไปข้างนอกโดยไม่จำเป็น';
+
+    document.getElementById('updated-note-1').textContent = nowThaiFull();
+    document.getElementById('tab1-loading').style.display='none';
+    document.getElementById('tab1-content').style.display='block';
+  }
+
+  // 2. เรนเดอร์แท็บ อากาศละเอียด (ซ่อนอยู่ใน Modal 1)
+  function renderTab2(weather){
+    const cur = weather.current;
+    document.getElementById('stat-humidity').textContent = Math.round(cur.relative_humidity_2m) + '%';
+
+    const daily = weather.daily;
+    const todayIdx = daily.time.indexOf(cur.time.slice(0,10));
+    const idx = todayIdx >= 0 ? todayIdx : 7;
+
+    document.getElementById('stat-uv').textContent = daily.uv_index_max[idx] != null ? daily.uv_index_max[idx].toFixed(1) : '--';
+    document.getElementById('stat-rain').textContent = (daily.precipitation_probability_max[idx] ?? 0) + '%';
+
+    const labels = daily.time.map(fmtDay);
+    const highs = daily.temperature_2m_max;
+    const lows = daily.temperature_2m_min;
+    const rain = daily.precipitation_probability_max;
+
+    // เคลียร์กราฟเก่าก่อนสร้างใหม่
+    if(weatherChartInstance) weatherChartInstance.destroy();
+
+    const ctx = document.getElementById('weatherChart').getContext('2d');
+    weatherChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { type: 'line', label: 'สูงสุด (°C)', data: highs, borderColor: '#35667F', backgroundColor: '#35667F', yAxisID: 'y', tension: 0.35, pointRadius: 3, order: 1 },
+          { type: 'line', label: 'ต่ำสุด (°C)', data: lows, borderColor: '#8CA88F', backgroundColor: '#8CA88F', yAxisID: 'y', tension: 0.35, pointRadius: 3, borderDash: [4,3], order: 2 },
+          { type: 'bar', label: 'โอกาสฝน (%)', data: rain, backgroundColor: 'rgba(228,190,94,0.45)', yAxisID: 'y1', order: 3, borderRadius: 4, barThickness: 14 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { position: 'left', ticks: { callback: v => v+'°' }, grid: { color: '#EFEAE0' } },
+          y1: { position: 'right', min:0, max:100, ticks: { callback: v => v+'%' }, grid: { display:false } },
+          x: { grid: { display:false }, ticks: { font: { family: 'Noto Sans Thai', size: 11 } } }
+        }
+      }
+    });
+
+    document.getElementById('updated-note-2').textContent = 'อัปเดตล่าสุดเวลา ' + timeNow() + ' น.';
+    document.getElementById('tab2-loading').style.display='none';
+    document.getElementById('tab2-content').style.display='block';
+  }
+
+  // 3. เรนเดอร์แท็บ ฝุ่น PM2.5 (ซ่อนอยู่ใน Modal 2)
+  function renderTab3(air){
+    const pmVal = air.current.pm2_5;
+    const status = pmStatus(pmVal);
+    document.getElementById('pm3-value').textContent = Math.round(pmVal*10)/10;
+    const statusEl = document.getElementById('pm3-status');
+    statusEl.textContent = status.label;
+    statusEl.style.background = status.color;
+
+    const daily = buildDailyPM(air);
+    const todayIdx = daily.time.indexOf(air.current.time.slice(0,10));
+    const idx = todayIdx >= 0 ? todayIdx : daily.time.length - 2;
+
+    const past7 = daily.pm2_5_max.slice(Math.max(0, idx-7), idx);
+    const yesterday = daily.pm2_5_max[idx-1];
+    const avg7 = past7.length ? (past7.reduce((a,b)=>a+b,0)/past7.length) : null;
+    const max7 = past7.length ? Math.max(...past7) : null;
+
+    document.getElementById('pm-yesterday').textContent = yesterday != null ? Math.round(yesterday*10)/10 : '--';
+    document.getElementById('pm-avg7').textContent = avg7 != null ? Math.round(avg7*10)/10 : '--';
+    document.getElementById('pm-max7').textContent = max7 != null ? Math.round(max7*10)/10 : '--';
+
+    const chartLabels = daily.time.slice(Math.max(0, idx-6), idx+1).map(fmtDay);
+    const chartData = daily.pm2_5_max.slice(Math.max(0, idx-6), idx+1);
+    const barColors = chartData.map((v,i,arr) => i === arr.length-1 ? '#24485C' : '#8CA88F');
+
+    // เคลียร์กราฟเก่าก่อนสร้างใหม่
+    if(pmChartInstance) pmChartInstance.destroy();
+
+    const ctx = document.getElementById('pmChart').getContext('2d');
+    pmChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [{ label: 'PM2.5 (µg/m³)', data: chartData, backgroundColor: barColors, borderRadius: 6, barThickness: 26 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display:false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color:'#EFEAE0' } },
+          x: { grid: { display:false }, ticks: { font: { family:'Noto Sans Thai', size: 11 } } }
+        }
+      },
+      plugins: [{
+        id: 'thresholdLine',
+        afterDraw(chart){
+          const {ctx, chartArea, scales} = chart;
+          const y = scales.y.getPixelForValue(37.5);
+          ctx.save();
+          ctx.strokeStyle = '#DE9450';
+          ctx.setLineDash([5,4]);
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }]
+    });
+
+    const advice = pmAdvice(pmVal);
+    document.getElementById('advice-icon').style.background = advice.color;
+    document.getElementById('advice-title').textContent = advice.title;
+    document.getElementById('advice-text').textContent = advice.text;
+
+    document.getElementById('updated-note-3').textContent = 'อัปเดตล่าสุดเวลา ' + timeNow() + ' น.';
+    document.getElementById('tab3-loading').style.display='none';
+    document.getElementById('tab3-content').style.display='block';
+  }
+
+  // เริ่มต้นเรียกใช้งานครั้งแรกที่จังหวัดกรุงเทพมหานคร (ลำดับที่ 0)
+  handleProvinceChange();
+</script>
+
+</body>
+</html>
